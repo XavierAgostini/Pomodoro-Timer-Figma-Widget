@@ -1,7 +1,10 @@
 const { widget } = figma
-const { AutoLayout, Frame, Span, Text, Ellipse, useSyncedMap, useSyncedState, useEffect, waitForTask, useWidgetId } = widget
+const { AutoLayout, Frame, Span, Text, Ellipse, useSyncedMap, useSyncedState, useEffect, waitForTask, useWidgetId, usePropertyMenu } = widget
 
 const TWENTY_FIVE_MINUTES = 25 * 60 * 1000;
+const TEN_MINUTES = 10 * 60 * 1000;
+const FIVE_MINUTES = 5 * 60 * 1000;
+
 const STARTING_ANGLE = 1.5*Math.PI
 const BASE_ARC_DATA = {
   startingAngle: -0.5 * Math.PI,
@@ -12,8 +15,10 @@ const BASE_ARC_DATA = {
 function PomodoroTimer() {
   const widgetId = useWidgetId()
 
+  const [timerMenuValue, setTimerMenuValue] = useSyncedState('timerMenuValue', '25')
+  const [timerValue, setTimerValue] = useSyncedState('timerValue', TWENTY_FIVE_MINUTES)
   const [isRunning, setIsRunning] = useSyncedState('isRunning', false);
-  const [timeRemaining, setTimeRemaining] = useSyncedState('timeRemaining',TWENTY_FIVE_MINUTES)
+  const [timeRemaining, setTimeRemaining] = useSyncedState('timeRemaining',timerValue)
   const [arcData, setArcData] = useSyncedState('arcData', BASE_ARC_DATA)
 
   let timeout: number;
@@ -28,7 +33,7 @@ function PomodoroTimer() {
           }
           const updatedTime = timeRemaining - 500
 
-          const endAngle = 2*Math.PI*(updatedTime/ TWENTY_FIVE_MINUTES ) - 0.5*Math.PI
+          const endAngle = 2*Math.PI*(updatedTime/ timerValue ) - 0.5*Math.PI
 
           setArcData({
             startingAngle: -0.5*Math.PI,
@@ -62,11 +67,11 @@ function PomodoroTimer() {
     }
   }
 
-  const resetTimer = (delay = 500) => {
+  const resetTimer = (delay = 500, updatedTimeRemaining = 0) => {
     setIsRunning(false)
     waitForTask(new Promise(resolve => {
       setTimeout(() => {
-        setTimeRemaining(TWENTY_FIVE_MINUTES)
+        setTimeRemaining(updatedTimeRemaining || timerValue)
         setArcData(BASE_ARC_DATA)
         clearTimeout(timeout)
         const widgetNode = figma.getNodeById(widgetId)
@@ -102,6 +107,39 @@ function PomodoroTimer() {
     const widgetNode = figma.getNodeById(widgetId)
     if (widgetNode) figma.viewport.scrollAndZoomIntoView([widgetNode]);
   }
+
+  usePropertyMenu(
+    [
+      {
+        itemType: 'dropdown',
+        tooltip: 'Timer',
+        propertyName: 'timer',
+        selectedOption: timerMenuValue,
+        options: [{ option: '25', label: '25 minutes' }, { option: '10', label: '10 minutes' }, { option: '5', label: '5 minutes' }],
+      },
+    ],
+    (e) => {
+      if (e.propertyName === 'timer') {
+        const updatedNumMinutes = e.propertyValue as string
+        const updatedNumMs = updatedNumMinutes === '25' ? TWENTY_FIVE_MINUTES :  updatedNumMinutes === '10' ? TEN_MINUTES : FIVE_MINUTES
+
+        let timeout = 0
+        if (isRunning) {
+          pauseTimer()
+          timeout= 500
+        }
+        waitForTask(new Promise(resolve => {
+          setTimeout(() => {
+            setTimerMenuValue(updatedNumMinutes)
+            setTimerValue(updatedNumMs)
+            resetTimer(100, updatedNumMs)
+            resolve(null)
+          }, timeout)
+        }));
+
+      }
+    },
+  )
 
 
   return (    
